@@ -4,7 +4,7 @@ Transform your Hevy workout data into personalized coaching advice! This project
 
 ![Project Demo](https://img.shields.io/badge/Status-Ready%20to%20Use-brightgreen) ![Difficulty](https://img.shields.io/badge/Difficulty-Beginner%20Friendly-blue) ![Platform](https://img.shields.io/badge/Platform-n8n-orange)
 
-## 🎯 What Does This Do?
+## What Does This Do?
 
 **Simple Version**: Send your Hevy workout CSV to a Telegram bot → Get AI coaching advice + progress charts back!
 
@@ -15,7 +15,7 @@ Transform your Hevy workout data into personalized coaching advice! This project
 - 💬 Sends everything directly to your Telegram
 - 🔄 Works every time you export data from Hevy
 
-## 🚀 Quick Start (5 Minutes Setup)
+## Quick Start (5 Minutes Setup)
 
 ### Step 1: Install n8n
 Choose one option:
@@ -41,9 +41,9 @@ Open your browser and go to: `http://localhost:5678`
 1. Click "**+ Add Workflow**"
 2. Follow the setup guide below 👇
 
-## 📋 Complete Setup Guide
+## Complete Setup Guide
 
-### 🤖 1. Create a Telegram Bot
+### 1. Create a Telegram Bot
 
 1. **Open Telegram** and search for `@BotFather`
 2. **Send** `/newbot` to BotFather
@@ -51,7 +51,7 @@ Open your browser and go to: `http://localhost:5678`
 4. **Choose a username** (e.g., "my_workout_coach_bot")
 5. **Save the API token** - you'll need it in n8n!
 
-### 🔧 2. Build Your n8n Workflow
+### 2. Build Your n8n Workflow
 
 Your workflow will have **5 simple nodes**:
 
@@ -100,7 +100,7 @@ Your workflow will have **5 simple nodes**:
    {{ $('Code').first().json.charts }}
    ```
 
-### 🧠 3. AI System Message
+### 3. AI System Message
 
 Copy this into your AI Agent's system message:
 
@@ -151,7 +151,7 @@ Always base your recommendations on the actual workout data provided and tailor 
 
 **📝 Note**: Update the physical stats and goals to match your own!
 
-## 🎮 How to Use
+## How to Use
 
 ### 1. Export Data from Hevy
 1. Open **Hevy app** on your phone
@@ -236,29 +236,12 @@ Replace Telegram Trigger with:
 
 ```
 Hevy-Coach/
-├── 📄 README.md              # This guide
-├── 🐳 docker-compose.yml     # Docker setup (optional)
-├── 🐳 Dockerfile             # Custom n8n image (optional)
-├── 📦 requirements.txt       # Python dependencies (if needed)
-├── 💻 n8n_code_node.js       # Main processing code
-├── 📊 process_workout_data.py # Standalone Python version
-└── 📈 workout_data.csv       # Sample data
+├── README.md              # This guide
+├── docker-compose.yml     # Docker setup (optional)
+├── Dockerfile             # Custom n8n image (optional)
+├── n8n_code_node.js       # Main processing code
+└── workout_data.csv       # Sample data
 ```
-
-## 🤝 Contributing
-
-Found a bug? Want to add features? 
-
-1. **Fork** this repository
-2. **Create** a feature branch
-3. **Make** your changes
-4. **Submit** a pull request
-
-## 📞 Support
-
-- 🐛 **Bug Reports**: [Open an issue](https://github.com/yourusername/hevy-coach/issues)
-- 💡 **Feature Requests**: [Start a discussion](https://github.com/yourusername/hevy-coach/discussions)
-- ❓ **Questions**: Check the troubleshooting section above
 
 ## 📄 License
 
