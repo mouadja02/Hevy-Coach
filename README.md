@@ -2,7 +2,7 @@
 
 Transform your Hevy workout data into personalized coaching advice! This project automatically analyzes your workout CSV exports and provides AI-powered recommendations via Telegram.
 
-![Project Demo](https://img.shields.io/badge/Status-Ready%20to%20Use-brightgreen) ![Difficulty](https://img.shields.io/badge/Difficulty-Beginner%20Friendly-blue) ![Platform](https://img.shields.io/badge/Platform-n8n-orange)
+![Project Demo](https://img.shields.io/badge/Status-Ready%20to%20Use-brightgreen) ![Difficulty](https://img.shields.io/badge/Difficulty-Beginner%20Friendly-blue)
 
 ## What Does This Do?
 
