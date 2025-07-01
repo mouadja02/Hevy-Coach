@@ -1,0 +1,440 @@
+{
+  "name": "Hevy Workout Analyzer",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -840,
+        60
+      ],
+      "id": "e9c1e8de-69fb-4315-9c7d-c51d58a51f27",
+      "name": "Telegram Trigger",
+      "webhookId": "",
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code Node - Workout Data Processor (JavaScript)\n// This script processes workout JSON data and generates charts + raw data for AI analysis\n\n// Get input data from previous node\nconst inputData = $input.all();\n\n// Extract the workout data array from the input\nlet workoutData = [];\nif (inputData && inputData.length > 0) {\n    // Extract the actual data from n8n's wrapper structure\n    workoutData = inputData.map(item => {\n        // If data is wrapped in json field, extract it\n        if (item.json) {\n            return item.json;\n        }\n        return item;\n    });\n}\n\nif (workoutData.length === 0) {\n    return [{\n        json: {\n            error: \"No workout data found\",\n            rawData: [],\n            charts: \"\",\n            dataCount: 0\n        }\n    }];\n}\n\n// Function to parse date string to Date object\nfunction parseDate(dateStr) {\n    try {\n        const parts = dateStr.split(', ');\n        const datePart = parts[0]; // \"30 Jun 2025\"\n        const timePart = parts[1]; // \"19:56\"\n        \n        const dateObj = new Date(datePart + ' ' + timePart);\n        return dateObj;\n    } catch (e) {\n        return new Date();\n    }\n}\n\n// Function to calculate volume (weight × reps)\nfunction calculateVolume(weight, reps) {\n    const w = parseFloat(weight) || 0;\n    const r = parseInt(reps) || 0;\n    return w * r;\n}\n\n// Minimal processing: Add calculated fields, remove useless columns, and sort by date\nconst processedData = workoutData.map(set => {\n    // Remove title and description columns, keep only useful data\n    const {title, description, ...cleanSet} = set;\n    \n    const weight = parseFloat(set.weight_kg) || 0;\n    const reps = parseInt(set.reps) || 0;\n    \n    return {\n        start_time: set.start_time,\n        end_time: set.end_time,\n        exercise_title: set.exercise_title,\n        set_index: parseInt(set.set_index) || 0,\n        set_type: set.set_type,\n        weight_kg: weight,\n        reps: reps,\n        volume: calculateVolume(weight, reps),\n        date: parseDate(set.start_time),\n        // Include other useful fields if they exist\n        ...(set.superset_id && { superset_id: set.superset_id }),\n        ...(set.exercise_notes && { exercise_notes: set.exercise_notes }),\n        ...(set.distance_km && { distance_km: set.distance_km }),\n        ...(set.duration_seconds && { duration_seconds: set.duration_seconds }),\n        ...(set.rpe && { rpe: set.rpe })\n    };\n}).sort((a, b) => b.date - a.date); // Most recent first\n\n// Generate charts for visualization (only for plotting purposes)\n// Group by exercise for chart generation\nconst exerciseData = {};\nprocessedData.forEach(set => {\n    const exercise = set.exercise_title;\n    if (!exerciseData[exercise]) {\n        exerciseData[exercise] = [];\n    }\n    exerciseData[exercise].push({\n        date: set.date,\n        weight: set.weight_kg,\n        reps: set.reps,\n        volume: set.volume,\n        workout_session: set.start_time // Use start_time instead of title\n    });\n});\n\n// Create simple progress charts for top 3 exercises (by frequency)\nconst topExercises = Object.entries(exerciseData)\n    .sort((a, b) => b[1].length - a[1].length)\n    .slice(0, 3);\n\n// Function to create ASCII progress chart\nfunction createProgressChart(exerciseName, exerciseHistory) {\n    if (exerciseHistory.length < 2) return `${exerciseName}: Not enough data for chart`;\n    \n    // Group by workout session to get max weight per session\n    const sessionData = {};\n    exerciseHistory.forEach(set => {\n        const sessionKey = set.workout_session + '_' + set.date.toDateString();\n        if (!sessionData[sessionKey] || sessionData[sessionKey].weight < set.weight) {\n            sessionData[sessionKey] = {\n                date: set.date,\n                weight: set.weight,\n                volume: set.volume\n            };\n        }\n    });\n    \n    const sessions = Object.values(sessionData).sort((a, b) => a.date - b.date);\n    \n    if (sessions.length < 2) return `${exerciseName}: Not enough sessions for chart`;\n    \n    const maxWeight = Math.max(...sessions.map(s => s.weight));\n    const minWeight = Math.min(...sessions.map(s => s.weight));\n    const range = maxWeight - minWeight;\n    \n    if (range === 0) return `${exerciseName}: Consistent weight at ${maxWeight}kg`;\n    \n    let chart = `📈 ${exerciseName} Progress:\\n`;\n    chart += \"─\".repeat(35) + \"\\n\";\n    \n    sessions.slice(-6).forEach(session => {\n        const normalizedWeight = range > 0 ? (session.weight - minWeight) / range : 0;\n        const barLength = Math.round(normalizedWeight * 15);\n        const bar = \"█\".repeat(barLength) + \"░\".repeat(15 - barLength);\n        const dateStr = session.date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });\n        chart += `${dateStr} |${bar}| ${session.weight}kg\\n`;\n    });\n    \n    return chart;\n}\n\n// Generate charts\nlet charts = \"📊 WORKOUT PROGRESS CHARTS\\n\";\ncharts += \"═\".repeat(30) + \"\\n\\n\";\n\ntopExercises.forEach(([exercise, history]) => {\n    charts += createProgressChart(exercise, history) + \"\\n\\n\";\n});\n\n// Basic statistics for context (minimal processing)\nconst totalSets = processedData.length;\nconst uniqueExercises = new Set(processedData.map(set => set.exercise_title)).size;\nconst totalVolume = processedData.reduce((sum, set) => sum + set.volume, 0);\nconst dateRange = {\n    earliest: processedData[processedData.length - 1]?.start_time,\n    latest: processedData[0]?.start_time\n};\n\n// Create AI prompt with clean raw data\nconst aiPrompt = `You are an expert fitness coach and nutritionist specializing in body transformation and strength training. You are helping a client who is:\n\nPHYSICAL STATS:\n- Height: 180cm\n- Weight: 83kg\n- Goal: Fat loss while maintaining/building muscle\n\nSTRENGTH PROFILE:\n- STRONG areas: Back, legs, glutes\n- WEAK areas: Chest, arms, abs\n\nYOUR ROLE:\nAnalyze the provided workout data and give personalized recommendations focusing on:\n\n1. WORKOUT OPTIMIZATION:\n   - Prioritize chest, arms, and abs development\n   - Maintain current back/leg/glute strength\n   - Suggest exercise modifications and progressions\n   - Recommend training frequency and volume adjustments\n   - Identify muscle imbalances and corrective strategies\n\n2. NUTRITION GUIDANCE:\n   - Fat loss nutrition strategies\n   - Macro recommendations for body recomposition\n   - Meal timing suggestions\n   - Supplement recommendations if needed\n\n3. BODY RECOMPOSITION:\n   - Strategies to lose fat while preserving/building muscle\n   - Training periodization for optimal results\n   - Recovery and sleep optimization\n\nCOMMUNICATION STYLE:\n- Be specific and actionable\n- Use data from the workout analysis\n- Provide concrete numbers (sets, reps, weights)\n- Include progression timelines\n- Be motivational but realistic\n- Focus on sustainable long-term changes\n\nAlways base your recommendations on the actual workout data provided and tailor advice to address the specific strength imbalances and fat loss goals.\n\nRAW WORKOUT DATA:\n${JSON.stringify(processedData, null, 2)}\n\nBASIC STATS:\n- Total sets recorded: ${totalSets}\n- Unique exercises: ${uniqueExercises}\n- Total volume lifted: ${totalVolume.toLocaleString()}kg\n- Date range: ${dateRange.earliest} to ${dateRange.latest}\n\nPlease provide:\n1. 🎯 Analysis of my training patterns and progression\n2. 💪 Specific recommendations for each major exercise\n3. 📈 Insights about my performance trends\n4. 🏆 Areas where I'm progressing well\n5. ⚠️ Areas that need attention or improvement\n6. 🔄 Suggestions for optimizing my routine\n7. 📋 Concrete next steps for continued progress\n\nFocus on actionable, specific advice based on the actual data patterns you observe.`;\n\n// Return the processed data\nreturn [{\n    json: {\n        // Clean raw data for AI analysis (without n8n wrapper fields)\n        rawData: processedData,\n        \n        // AI prompt with clean raw data\n        aiPrompt: aiPrompt,\n        \n        // Charts for visualization\n        charts: charts,\n        \n        // Basic metadata\n        metadata: {\n            totalSets: totalSets,\n            uniqueExercises: uniqueExercises,\n            totalVolume: totalVolume,\n            dateRange: dateRange,\n            topExercises: topExercises.map(([name, data]) => ({\n                name: name,\n                frequency: data.length\n            }))\n        }\n    }\n}]; "
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        -40
+      ],
+      "id": "24302473-1c65-46ac-ab7f-c321a7174cdd",
+      "name": "Process Workout Data"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.document.file_id }}"
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -620,
+        60
+      ],
+      "id": "ae9ed38c-aad2-4c95-8f8b-34d1cb22f55b",
+      "name": "Get Telegram File",
+      "webhookId": "",
+      "alwaysOutputData": false,
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        -40
+      ],
+      "id": "f673e393-7358-4bd9-b358-84d4dddd4b52",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.aiPrompt }}",
+        "options": {
+          "systemMessage": "You are an expert fitness coach and nutritionist specializing in body transformation and strength training."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        40,
+        -40
+      ],
+      "id": "2b89f33b-7b41-4b88-a8e9-fae600b54d1f",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseFormat": "text"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        0,
+        180
+      ],
+      "id": "0c0621a9-a3fc-4ec5-a4b7-0d5b29e8e59c",
+      "name": "DeepSeek Chat Model",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "",
+          "name": "DeepSeek account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "output",
+        "options": {
+          "fileName": "AI-analysis"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        400,
+        -140
+      ],
+      "id": "d9720504-2255-47f0-a0a1-1b6ff1da899b",
+      "name": "Convert to File"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the AI response\nconst aiResponse = $input.first().json.output; // Adjust field name as needed\n\n// Function to convert markdown to clean text\nfunction cleanMarkdown(text) {\n    return text\n        // Remove markdown headers (### ** text **)\n        .replace(/#{1,6}\\s?\\*?\\*?([^*\\n]+)\\*?\\*?/g, '$1')\n        // Remove bold/italic markers\n        .replace(/\\*\\*([^*]+)\\*\\*/g, '$1')\n        .replace(/\\*([^*]+)\\*/g, '$1')\n        // Convert \\n to actual line breaks\n        .replace(/\\\\n/g, '\\n')\n        // Clean up multiple spaces\n        .replace(/\\s+/g, ' ')\n        // Clean up multiple line breaks\n        .replace(/\\n\\s*\\n\\s*\\n/g, '\\n\\n')\n        // Trim whitespace\n        .trim();\n}\n\nconst cleanResponse = cleanMarkdown(aiResponse);\n\nreturn [{\n    json: {\n        cleanText: cleanResponse,\n        originalText: aiResponse\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        60
+      ],
+      "id": "3fde8fd6-c07f-4854-b082-40a0fb4ce4ad",
+      "name": "Clean AI Response"
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.cleanText }}",
+        "additionalFields": {
+          "appendAttribution": true
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        620,
+        60
+      ],
+      "id": "e5537473-23f4-4463-87e9-4bd05a8fce3e",
+      "name": "Send Telegram Message",
+      "webhookId": "",
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "get",
+        "owner": {
+          "__rl": true,
+          "value": "YOUR_GITHUB_USERNAME",
+          "mode": "name"
+        },
+        "repository": {
+          "__rl": true,
+          "value": "YOUR_REPO_NAME",
+          "mode": "list",
+          "cachedResultName": "YOUR_REPO_NAME",
+          "cachedResultUrl": "https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME"
+        },
+        "filePath": "workout_data.csv",
+        "additionalParameters": {
+          "reference": ""
+        }
+      },
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        -620,
+        -140
+      ],
+      "id": "b15a13b1-fcb2-4fc9-8e93-6742ed44de25",
+      "name": "Get GitHub File",
+      "webhookId": "",
+      "credentials": {
+        "githubApi": {
+          "id": "",
+          "name": "GitHub account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "owner": {
+          "__rl": true,
+          "value": "YOUR_GITHUB_USERNAME",
+          "mode": "list",
+          "cachedResultName": "YOUR_GITHUB_USERNAME",
+          "cachedResultUrl": "https://github.com/YOUR_GITHUB_USERNAME"
+        },
+        "repository": {
+          "__rl": true,
+          "value": "YOUR_REPO_NAME",
+          "mode": "list",
+          "cachedResultName": "YOUR_REPO_NAME",
+          "cachedResultUrl": "https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME"
+        },
+        "events": [
+          "push"
+        ],
+        "options": {}
+      },
+      "type": "n8n-nodes-base.githubTrigger",
+      "typeVersion": 1,
+      "position": [
+        -840,
+        -140
+      ],
+      "id": "c3eb5865-ce86-4ac6-9fcc-95dc8c87233c",
+      "name": "GitHub Trigger",
+      "webhookId": "",
+      "credentials": {
+        "githubApi": {
+          "id": "",
+          "name": "GitHub account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Process Workout Data').item.json.rawData }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        160,
+        180
+      ],
+      "id": "629088ab-47dd-4d89-ac80-7026ebd3c8b8",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "edit",
+        "owner": {
+          "__rl": true,
+          "value": "YOUR_GITHUB_USERNAME",
+          "mode": "list",
+          "cachedResultName": "YOUR_GITHUB_USERNAME",
+          "cachedResultUrl": "https://github.com/YOUR_GITHUB_USERNAME"
+        },
+        "repository": {
+          "__rl": true,
+          "value": "YOUR_REPO_NAME",
+          "mode": "list",
+          "cachedResultName": "YOUR_REPO_NAME",
+          "cachedResultUrl": "https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME"
+        },
+        "filePath": "ai-response.md",
+        "binaryData": true,
+        "commitMessage": "Updated AI fitness analysis"
+      },
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        620,
+        -140
+      ],
+      "id": "5886515f-cfc5-4587-a57f-220906bf27af",
+      "name": "Save to GitHub",
+      "webhookId": "",
+      "credentials": {
+        "githubApi": {
+          "id": "",
+          "name": "GitHub account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Telegram File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Telegram File": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Process Workout Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Workout Data": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Convert to File",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Clean AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to File": {
+      "main": [
+        [
+          {
+            "node": "Save to GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean AI Response": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram Message": {
+      "main": [
+        []
+      ]
+    },
+    "Get GitHub File": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GitHub Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get GitHub File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": ""
+  },
+  "id": "",
+  "tags": []
+}
