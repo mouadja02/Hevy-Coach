@@ -6,12 +6,11 @@ Transform your Hevy workout data into personalized coaching advice! This project
 
 ## What Does This Do?
 
-**Simple Version**: Send your Hevy workout CSV to a Telegram bot → Get AI coaching advice + progress charts back!
+**Simple Version**: Send your Hevy workout CSV to a Telegram bot → Get AI coaching advice
 
 **Detailed Version**: 
 - 📊 Analyzes your workout data automatically
 - 🤖 Provides personalized coaching recommendations using AI
-- 📈 Creates progress charts for your top exercises
 - 💬 Sends everything directly to your Telegram
 - 🔄 Works every time you export data from Hevy
 
@@ -96,8 +95,6 @@ Your workflow will have **5 simple nodes**:
 
    {{ $('AI Agent').first().json.output }}
 
-   📊 **Progress Charts**
-   {{ $('Code').first().json.charts }}
    ```
 
 ### 3. AI System Message
@@ -171,7 +168,6 @@ You'll receive:
 - 📈 Progress analysis for your top exercises
 - 💪 Specific advice for weak areas
 - 🍽️ Nutrition suggestions
-- 📊 ASCII progress charts
 
 ## 🛠️ Troubleshooting
 
@@ -184,10 +180,6 @@ You'll receive:
 - ✅ Check your AI service API key
 - ✅ Make sure you have credits/quota available
 - ✅ Verify the AI prompt field: `{{ $('Code').first().json.aiPrompt }}`
-
-### "Charts not showing"
-- ✅ Make sure you have at least 2 workouts for the same exercise
-- ✅ Check the Telegram message includes: `{{ $('Code').first().json.charts }}`
 
 ### "Workflow not triggering"
 - ✅ Make sure your Telegram bot token is correct
@@ -202,17 +194,6 @@ Edit the AI system message to match your:
 - Fitness goals
 - Strong/weak muscle groups
 
-### Add More Exercises to Charts
-In the code, change this line:
-```javascript
-.slice(0, 3);  // Change 3 to show more exercises
-```
-
-### Modify Chart Style
-Look for the `createProgressChart` function in the code and customize:
-- Bar characters (█ ░)
-- Chart width
-- Date format
 
 ## 🔧 Advanced Features
 
