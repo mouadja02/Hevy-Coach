@@ -30,8 +30,8 @@ npm install n8n -g
 n8n start
 ```
 
-**Option C: Desktop App**
-Download from [n8n.io](https://n8n.io/download/)
+**Option C: n8n Cloud**
+Create an account on [n8n.io](https://n8n.io/)
 
 ### Step 2: Access n8n
 Open your browser and go to: `http://localhost:5678`
